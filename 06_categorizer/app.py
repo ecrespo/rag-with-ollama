@@ -3,8 +3,8 @@ import os
 
 
 model = "llama3.2"
-input_file = "./data/grocery_list.txt"
-output_file = "./data/categorized_grocery_list.txt"
+input_file = "data/grocery_list.txt"
+output_file = "data/categorized_grocery_list.txt"
 
 
 if not os.path.exists(input_file):

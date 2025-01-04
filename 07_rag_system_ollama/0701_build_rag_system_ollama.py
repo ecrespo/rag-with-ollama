@@ -9,7 +9,7 @@
 from langchain_community.document_loaders import UnstructuredPDFLoader
 from langchain_community.document_loaders import OnlinePDFLoader
 
-doc_path = "./data/BOI.pdf"
+doc_path = "data/BOI.pdf"
 model = "llama3.2"
 
 # Local PDF file uploads

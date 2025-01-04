@@ -1,6 +1,5 @@
-# app.py
+# main.py
 
-import streamlit as st
 import os
 import logging
 from langchain_community.document_loaders import UnstructuredPDFLoader
@@ -18,11 +17,10 @@ import ollama
 logging.basicConfig(level=logging.INFO)
 
 # Constants
-DOC_PATH = "./data/BOI.pdf"
+DOC_PATH = "data/BOI.pdf"
 MODEL_NAME = "llama3.2"
 EMBEDDING_MODEL = "nomic-embed-text"
 VECTOR_STORE_NAME = "simple-rag"
-PERSIST_DIRECTORY = "./chroma_db"
 
 
 def ingest_pdf(doc_path):
@@ -34,7 +32,6 @@ def ingest_pdf(doc_path):
         return data
     else:
         logging.error(f"PDF file not found at path: {doc_path}")
-        st.error("PDF file not found.")
         return None
 
 
@@ -46,38 +43,17 @@ def split_documents(documents):
     return chunks
 
 
-@st.cache_resource
-def load_vector_db():
-    """Load or create the vector database."""
+def create_vector_db(chunks):
+    """Create a vector database from document chunks."""
     # Pull the embedding model if not already available
     ollama.pull(EMBEDDING_MODEL)
 
-    embedding = OllamaEmbeddings(model=EMBEDDING_MODEL)
-
-    if os.path.exists(PERSIST_DIRECTORY):
-        vector_db = Chroma(
-            embedding_function=embedding,
-            collection_name=VECTOR_STORE_NAME,
-            persist_directory=PERSIST_DIRECTORY,
-        )
-        logging.info("Loaded existing vector database.")
-    else:
-        # Load and process the PDF document
-        data = ingest_pdf(DOC_PATH)
-        if data is None:
-            return None
-
-        # Split the documents into chunks
-        chunks = split_documents(data)
-
-        vector_db = Chroma.from_documents(
-            documents=chunks,
-            embedding=embedding,
-            collection_name=VECTOR_STORE_NAME,
-            persist_directory=PERSIST_DIRECTORY,
-        )
-        vector_db.persist()
-        logging.info("Vector database created and persisted.")
+    vector_db = Chroma.from_documents(
+        documents=chunks,
+        embedding=OllamaEmbeddings(model=EMBEDDING_MODEL),
+        collection_name=VECTOR_STORE_NAME,
+    )
+    logging.info("Vector database created.")
     return vector_db
 
 
@@ -101,7 +77,7 @@ Original question: {question}""",
 
 
 def create_chain(retriever, llm):
-    """Create the chain with preserved syntax."""
+    """Create the chain"""
     # RAG prompt
     template = """Answer the question based ONLY on the following context:
 {context}
@@ -117,43 +93,38 @@ Question: {question}
         | StrOutputParser()
     )
 
-    logging.info("Chain created with preserved syntax.")
+    logging.info("Chain created successfully.")
     return chain
 
 
 def main():
-    st.title("Document Assistant")
+    # Load and process the PDF document
+    data = ingest_pdf(DOC_PATH)
+    if data is None:
+        return
 
-    # User input
-    user_input = st.text_input("Enter your question:", "")
+    # Split the documents into chunks
+    chunks = split_documents(data)
 
-    if user_input:
-        with st.spinner("Generating response..."):
-            try:
-                # Initialize the language model
-                llm = ChatOllama(model=MODEL_NAME)
+    # Create the vector database
+    vector_db = create_vector_db(chunks)
 
-                # Load the vector database
-                vector_db = load_vector_db()
-                if vector_db is None:
-                    st.error("Failed to load or create the vector database.")
-                    return
+    # Initialize the language model
+    llm = ChatOllama(model=MODEL_NAME)
 
-                # Create the retriever
-                retriever = create_retriever(vector_db, llm)
+    # Create the retriever
+    retriever = create_retriever(vector_db, llm)
 
-                # Create the chain
-                chain = create_chain(retriever, llm)
+    # Create the chain with preserved syntax
+    chain = create_chain(retriever, llm)
 
-                # Get the response
-                response = chain.invoke(input=user_input)
+    # Example query
+    question = "How to report BOI?"
 
-                st.markdown("**Assistant:**")
-                st.write(response)
-            except Exception as e:
-                st.error(f"An error occurred: {str(e)}")
-    else:
-        st.info("Please enter a question to get started.")
+    # Get the response
+    res = chain.invoke(input=question)
+    print("Response:")
+    print(res)
 
 
 if __name__ == "__main__":
